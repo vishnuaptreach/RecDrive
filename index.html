@@ -6,7 +6,7 @@
 <title>RecDrive — Record. Upload. Share the link.</title>
 <meta name="description" content="Screen recorder for QA teams: stop recording and the video is already in Google Drive with a shareable link.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='%23ef4444'/></svg>">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -60,6 +60,7 @@
       <button id="btn-start" class="btn btn-record" disabled>● Start recording</button>
       <button id="btn-pause" class="btn btn-ghost hidden">⏸ Pause</button>
       <button id="btn-stop" class="btn btn-stop hidden">■ Stop &amp; upload</button>
+      <button id="btn-shot" class="btn btn-ghost" disabled>📸 Screenshot</button>
       <span id="timer" class="timer hidden">00:00</span>
       <span id="live-badge" class="live hidden">● REC</span>
     </div>
@@ -75,6 +76,7 @@
     <p id="up-status" class="hint">Uploading…</p>
     <div id="preview-wrap" class="hidden">
       <video id="preview" controls playsinline></video>
+      <img id="preview-img" class="hidden" alt="Screenshot preview">
       <p class="hint">👀 Preview check: video clear aanenkil mathram link share cheyyuka — garbled aanenkil delete cheythu onnude record cheyyuka.</p>
     </div>
     <div id="link-box" class="hidden">
@@ -89,14 +91,19 @@
   </section>
 
   <section class="card">
-    <h2 class="sec-title">🗂️ My uploads this session</h2>
-    <ul id="history" class="history"></ul>
-    <p id="history-empty" class="hint">Nothing yet — your recording links will stay here even after a refresh, ready to paste into the sheet.</p>
+    <h2 class="sec-title">🎬 Recordings</h2>
+    <div class="rec-controls">
+      <input type="date" id="f-date" title="Filter by date">
+      <input type="search" id="f-search" placeholder="🔎 Search by name…">
+      <button id="btn-refresh" class="btn btn-ghost">↻ Refresh</button>
+    </div>
+    <ul id="rec-list" class="history"></ul>
+    <p id="rec-empty" class="hint">Sign in to see the team's recordings.</p>
   </section>
 </main>
 
 <footer>Made with ♥ by <b>nuvish</b> · RecDrive uploads to the team Drive folder · viewable by everyone at aptreach.com</footer>
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

@@ -43,6 +43,8 @@ function renderAuth() {
   $('user-info').classList.toggle('hidden', !signed);
   if (signed && userProfile) $('user-info').textContent = '👤 ' + (userProfile.name || userProfile.email || '');
   $('btn-start').disabled = !signed;
+  $('btn-shot').disabled = !signed;
+  if (signed) listRecordings();
 }
 function ensureToken() {
   if (accessToken && Date.now() < tokenExpiry) return Promise.resolve(accessToken);
@@ -88,14 +90,15 @@ const QUALITY = {
   light:    { bitrate: 5_000_000,  width: 1920, height: 1080 },
 };
 
+function requireTitle() {
+  if ($('in-title').value.trim()) { $('in-title').style.borderColor = ''; return true; }
+  $('in-title').focus();
+  $('in-title').style.borderColor = '#ef4444';
+  toast('⚠️ Aadyam test-inu oru name kodukku — name illathe file create cheyyilla');
+  return false;
+}
 async function startRecording() {
-  if (!$('in-title').value.trim()) {
-    $('in-title').focus();
-    $('in-title').style.borderColor = '#ef4444';
-    toast('⚠️ Aadyam test-inu oru name kodukku — name illathe recording start cheyyilla');
-    return;
-  }
-  $('in-title').style.borderColor = '';
+  if (!requireTitle()) return;
   const q = QUALITY[$('in-quality').value] || QUALITY.high;
   try {
     displayStream = await navigator.mediaDevices.getDisplayMedia({
@@ -163,10 +166,43 @@ function onStopped() {
   cleanupStreams();
   // in-app preview: the tester can eyeball the clip while it uploads —
   // if it ever looks garbled, re-record instead of sharing a broken link.
+  $('preview-img').classList.add('hidden');
   const pv = $('preview');
+  pv.classList.remove('hidden');
   pv.src = URL.createObjectURL(lastBlob);
   $('preview-wrap').classList.remove('hidden');
   uploadVideo(lastBlob, lastName);
+}
+
+/* ================= screenshot ================= */
+async function takeScreenshot() {
+  if (!requireTitle()) return;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: 2560, max: 3840 }, height: { ideal: 1440, max: 2160 } }, audio: false,
+    });
+  } catch (e) { toast('Screen pick cancelled'); return; }
+  try {
+    const vid = document.createElement('video');
+    vid.srcObject = stream; vid.muted = true;
+    await vid.play();
+    await new Promise((r) => setTimeout(r, 350)); // let a real frame arrive
+    const c = document.createElement('canvas');
+    c.width = vid.videoWidth || 1280; c.height = vid.videoHeight || 720;
+    c.getContext('2d').drawImage(vid, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    if (!blob) throw new Error('screenshot failed');
+    lastBlob = blob; lastMime = 'image/png'; lastName = stampName('png');
+    $('preview').classList.add('hidden');
+    const img = $('preview-img');
+    img.src = URL.createObjectURL(blob);
+    img.classList.remove('hidden');
+    $('preview-wrap').classList.remove('hidden');
+    $('upload-card').classList.remove('hidden');
+    uploadVideo(lastBlob, lastName);
+  } catch (e) { toast('⚠️ ' + e.message); }
+  finally { stream.getTracks().forEach((t) => t.stop()); }
 }
 
 /* ================= Drive upload (resumable, chunked) ================= */
@@ -216,7 +252,7 @@ async function uploadVideo(blob, name) {
     lastFileId = fileId;
     $('btn-del-file').classList.remove('hidden');
     try { await navigator.clipboard.writeText(link); toast('Link copied 📋'); } catch (e) {}
-    saveHistory(name, link, fileId);
+    listRecordings();
   } catch (err) {
     setProgress(parseInt($('up-pct').textContent) || 0, '⚠️ ' + err.message + ' — video kept in this tab: retry or download it.');
     $('up-actions').classList.remove('hidden');
@@ -230,63 +266,86 @@ function setProgress(pct, status) {
 /* ================= delete ================= */
 async function deleteDriveFile(id) {
   const token = await ensureToken();
+  // trash first — folder owners/editors can trash; permanent delete is owner-only
+  const tr = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '/trash', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token },
+  });
+  if (tr.ok) return;
   const r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id), {
     method: 'DELETE', headers: { Authorization: 'Bearer ' + token },
   });
   if (!r.ok && r.status !== 204) throw new Error('delete failed (' + r.status + ')');
 }
-function removeHistoryById(id) {
-  const h = JSON.parse(localStorage.getItem('recdrive-history') || '[]').filter((it) => it.id !== id);
-  localStorage.setItem('recdrive-history', JSON.stringify(h));
-  renderHistory();
+async function deleteRecording(id) {
+  if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
+  try {
+    await deleteDriveFile(id);
+    if (id === lastFileId) {
+      lastFileId = '';
+      $('btn-del-file').classList.add('hidden');
+      $('link-box').classList.add('hidden');
+      setProgress(100, '🗑️ File deleted from Drive.');
+    }
+    toast('Deleted 🗑️');
+    listRecordings();
+  } catch (e) { toast('Delete failed: ' + e.message); }
 }
 
-/* ================= history (localStorage) ================= */
-function saveHistory(name, link, id) {
-  const h = JSON.parse(localStorage.getItem('recdrive-history') || '[]');
-  h.unshift({ name, link, id: id || '', ts: Date.now() });
-  localStorage.setItem('recdrive-history', JSON.stringify(h.slice(0, 30)));
-  renderHistory();
+/* ================= recordings list (Drive folder) ================= */
+let allRecs = [];
+async function listRecordings() {
+  if (!accessToken) return;
+  try {
+    const token = await ensureToken();
+    const q = encodeURIComponent(`'${CONFIG.FOLDER_ID}' in parents and trashed = false`);
+    const fields = encodeURIComponent('files(id,name,createdTime,webViewLink,size,mimeType,capabilities/canTrash,capabilities/canDelete)');
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=createdTime%20desc&pageSize=100&fields=${fields}`, {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    const data = await r.json();
+    allRecs = data.files || [];
+    renderRecs();
+  } catch (e) { /* list is best-effort */ }
 }
-function renderHistory() {
-  const h = JSON.parse(localStorage.getItem('recdrive-history') || '[]');
-  $('history-empty').classList.toggle('hidden', h.length > 0);
-  $('history').innerHTML = h.map((it) =>
-    `<li><span class="h-name" title="${it.name}">${it.name}</span><a href="${it.link}" target="_blank" rel="noopener">Open ↗</a>${it.id ? `<button class="h-del" data-id="${it.id}" title="Delete from Drive">🗑️</button>` : ''}</li>`).join('');
-  document.querySelectorAll('.h-del').forEach((b) => { b.onclick = () => deleteFromHistory(b.dataset.id); });
-}
-async function deleteFromHistory(id) {
-  if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
-  try { await deleteDriveFile(id); removeHistoryById(id); toast('Deleted 🗑️'); }
-  catch (e) { toast('Delete failed: ' + e.message); }
+function renderRecs() {
+  const d = $('f-date').value; // yyyy-mm-dd, empty = all dates
+  const s = ($('f-search').value || '').trim().toLowerCase();
+  const rows = allRecs.filter((f) => {
+    if (d && new Date(f.createdTime).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) !== d) return false;
+    if (s && !f.name.toLowerCase().includes(s)) return false;
+    return true;
+  });
+  $('rec-empty').classList.toggle('hidden', rows.length > 0);
+  $('rec-empty').textContent = accessToken ? 'No recordings match.' : 'Sign in to see the team\'s recordings.';
+  $('rec-list').innerHTML = rows.map((f) => {
+    const t = new Date(f.createdTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const mb = f.size ? ' · ' + (f.size / 1048576).toFixed(1) + ' MB' : '';
+    const icon = (f.mimeType || '').startsWith('image/') ? '🖼️' : '🎬';
+    const canDel = f.capabilities && (f.capabilities.canTrash || f.capabilities.canDelete);
+    return `<li><span class="h-name" title="${f.name}">${icon} ${f.name}</span><span class="h-meta">${t}${mb}</span><a href="${f.webViewLink}" target="_blank" rel="noopener">Open ↗</a>${canDel ? `<button class="h-del" data-id="${f.id}" title="Delete from Drive">🗑️</button>` : ''}</li>`;
+  }).join('');
+  document.querySelectorAll('#rec-list .h-del').forEach((b) => { b.onclick = () => deleteRecording(b.dataset.id); });
 }
 
 /* ================= wire up ================= */
 window.addEventListener('load', () => {
   if (!configured()) $('setup-banner').classList.remove('hidden');
-  initAuth(); renderHistory();
+  initAuth();
+  $('f-date').value = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const savedQ = localStorage.getItem('recdrive-quality');
   if (savedQ) $('in-quality').value = savedQ;
   $('in-quality').onchange = () => localStorage.setItem('recdrive-quality', $('in-quality').value);
   $('btn-auth').onclick = () => tokenClient && tokenClient.requestAccessToken({ prompt: 'consent' });
   $('btn-signout').onclick = () => { accessToken = null; userProfile = null; renderAuth(); };
   $('btn-start').onclick = startRecording;
+  $('btn-shot').onclick = takeScreenshot;
+  $('f-date').onchange = renderRecs;
+  $('f-search').oninput = renderRecs;
+  $('btn-refresh').onclick = listRecordings;
   $('btn-pause').onclick = togglePause;
   $('btn-stop').onclick = stopRecording;
   $('btn-copy').onclick = async () => { $('link-out').select(); try { await navigator.clipboard.writeText($('link-out').value); toast('Link copied 📋'); } catch (e) { document.execCommand('copy'); } };
-  $('btn-del-file').onclick = async () => {
-    if (!lastFileId) return;
-    if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
-    try {
-      await deleteDriveFile(lastFileId);
-      removeHistoryById(lastFileId);
-      lastFileId = '';
-      $('btn-del-file').classList.add('hidden');
-      $('link-box').classList.add('hidden');
-      setProgress(100, '🗑️ File deleted from Drive.');
-      toast('Deleted 🗑️');
-    } catch (e) { toast('Delete failed: ' + e.message); }
-  };
+  $('btn-del-file').onclick = () => { if (lastFileId) deleteRecording(lastFileId); };
   $('btn-retry').onclick = () => lastBlob && uploadVideo(lastBlob, lastName);
   $('btn-download').onclick = () => {
     if (!lastBlob) return;

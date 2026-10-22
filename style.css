@@ -60,6 +60,11 @@ select:focus { border-color: var(--red); }
 #up-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #0ea5e9, var(--ok)); transition: width .2s; }
 #link-box { display: flex; gap: 8px; margin-top: 12px; }
 #preview { width: 100%; border-radius: 10px; margin-top: 10px; background: #000; }
+#preview-img { width: 100%; border-radius: 10px; margin-top: 10px; background: #000; }
+.rec-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.rec-controls input { background: #0e0e14; border: 1px solid var(--line); color: inherit; padding: 8px 10px; border-radius: 8px; font: inherit; font-size: 13px; }
+.rec-controls #f-search { flex: 1; min-width: 140px; }
+.h-meta { opacity: .65; font-size: 12px; white-space: nowrap; }
 #link-box input { flex: 1; }
 #up-actions { display: flex; gap: 8px; margin-top: 12px; }
 .sec-title { font-size: 15px; margin-bottom: 10px; }
