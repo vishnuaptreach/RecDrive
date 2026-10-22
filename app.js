@@ -58,7 +58,7 @@ function ensureToken() {
 
 /* ================= recording ================= */
 let displayStream = null, micStream = null, audioCtx = null, recorder = null;
-let chunks = [], startStamp = 0, elapsedBefore = 0, timerInt = null, lastBlob = null, lastName = '', lastMime = 'video/webm';
+let chunks = [], startStamp = 0, elapsedBefore = 0, timerInt = null, lastBlob = null, lastName = '', lastMime = 'video/webm', lastFileId = '';
 
 function pickMime() {
   // Compatibility first: MP4/H.264 and VP8 play everywhere (phones, Windows,
@@ -89,6 +89,13 @@ const QUALITY = {
 };
 
 async function startRecording() {
+  if (!$('in-title').value.trim()) {
+    $('in-title').focus();
+    $('in-title').style.borderColor = '#ef4444';
+    toast('⚠️ Aadyam test-inu oru name kodukku — name illathe recording start cheyyilla');
+    return;
+  }
+  $('in-title').style.borderColor = '';
   const q = QUALITY[$('in-quality').value] || QUALITY.high;
   try {
     displayStream = await navigator.mediaDevices.getDisplayMedia({
@@ -206,8 +213,10 @@ async function uploadVideo(blob, name) {
     const link = meta.webViewLink;
     setProgress(100, '✅ Done — link ready. Paste it into the sheet.');
     $('link-out').value = link; $('link-box').classList.remove('hidden');
+    lastFileId = fileId;
+    $('btn-del-file').classList.remove('hidden');
     try { await navigator.clipboard.writeText(link); toast('Link copied 📋'); } catch (e) {}
-    saveHistory(name, link);
+    saveHistory(name, link, fileId);
   } catch (err) {
     setProgress(parseInt($('up-pct').textContent) || 0, '⚠️ ' + err.message + ' — video kept in this tab: retry or download it.');
     $('up-actions').classList.remove('hidden');
@@ -218,10 +227,24 @@ function setProgress(pct, status) {
   if (status) $('up-status').textContent = status;
 }
 
+/* ================= delete ================= */
+async function deleteDriveFile(id) {
+  const token = await ensureToken();
+  const r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id), {
+    method: 'DELETE', headers: { Authorization: 'Bearer ' + token },
+  });
+  if (!r.ok && r.status !== 204) throw new Error('delete failed (' + r.status + ')');
+}
+function removeHistoryById(id) {
+  const h = JSON.parse(localStorage.getItem('recdrive-history') || '[]').filter((it) => it.id !== id);
+  localStorage.setItem('recdrive-history', JSON.stringify(h));
+  renderHistory();
+}
+
 /* ================= history (localStorage) ================= */
-function saveHistory(name, link) {
+function saveHistory(name, link, id) {
   const h = JSON.parse(localStorage.getItem('recdrive-history') || '[]');
-  h.unshift({ name, link, ts: Date.now() });
+  h.unshift({ name, link, id: id || '', ts: Date.now() });
   localStorage.setItem('recdrive-history', JSON.stringify(h.slice(0, 30)));
   renderHistory();
 }
@@ -229,7 +252,13 @@ function renderHistory() {
   const h = JSON.parse(localStorage.getItem('recdrive-history') || '[]');
   $('history-empty').classList.toggle('hidden', h.length > 0);
   $('history').innerHTML = h.map((it) =>
-    `<li><span class="h-name" title="${it.name}">${it.name}</span><a href="${it.link}" target="_blank" rel="noopener">Open ↗</a></li>`).join('');
+    `<li><span class="h-name" title="${it.name}">${it.name}</span><a href="${it.link}" target="_blank" rel="noopener">Open ↗</a>${it.id ? `<button class="h-del" data-id="${it.id}" title="Delete from Drive">🗑️</button>` : ''}</li>`).join('');
+  document.querySelectorAll('.h-del').forEach((b) => { b.onclick = () => deleteFromHistory(b.dataset.id); });
+}
+async function deleteFromHistory(id) {
+  if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
+  try { await deleteDriveFile(id); removeHistoryById(id); toast('Deleted 🗑️'); }
+  catch (e) { toast('Delete failed: ' + e.message); }
 }
 
 /* ================= wire up ================= */
@@ -245,6 +274,19 @@ window.addEventListener('load', () => {
   $('btn-pause').onclick = togglePause;
   $('btn-stop').onclick = stopRecording;
   $('btn-copy').onclick = async () => { $('link-out').select(); try { await navigator.clipboard.writeText($('link-out').value); toast('Link copied 📋'); } catch (e) { document.execCommand('copy'); } };
+  $('btn-del-file').onclick = async () => {
+    if (!lastFileId) return;
+    if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
+    try {
+      await deleteDriveFile(lastFileId);
+      removeHistoryById(lastFileId);
+      lastFileId = '';
+      $('btn-del-file').classList.add('hidden');
+      $('link-box').classList.add('hidden');
+      setProgress(100, '🗑️ File deleted from Drive.');
+      toast('Deleted 🗑️');
+    } catch (e) { toast('Delete failed: ' + e.message); }
+  };
   $('btn-retry').onclick = () => lastBlob && uploadVideo(lastBlob, lastName);
   $('btn-download').onclick = () => {
     if (!lastBlob) return;
