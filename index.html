@@ -6,7 +6,7 @@
 <title>RecDrive — Record. Upload. Share the link.</title>
 <meta name="description" content="Screen recorder for QA teams: stop recording and the video is already in Google Drive with a shareable link.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='%23ef4444'/></svg>">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -37,6 +37,16 @@
 
     <div class="row">
       <label class="switch-row">
+        <span>🎞️ Quality</span>
+        <select id="in-quality">
+          <option value="high" selected>High — crisp text (12 Mbps)</option>
+          <option value="balanced">Balanced (8 Mbps)</option>
+          <option value="light">Light — smaller file (5 Mbps)</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="switch-row">
         <input type="checkbox" id="in-mic">
         <span>🎙️ Microphone narration</span>
       </label>
@@ -63,6 +73,10 @@
     </div>
     <div class="progress"><div id="up-bar"></div></div>
     <p id="up-status" class="hint">Uploading…</p>
+    <div id="preview-wrap" class="hidden">
+      <video id="preview" controls playsinline></video>
+      <p class="hint">👀 Preview check: video clear aanenkil mathram link share cheyyuka — garbled aanenkil delete cheythu onnude record cheyyuka.</p>
+    </div>
     <div id="link-box" class="hidden">
       <input id="link-out" type="text" readonly>
       <button id="btn-copy" class="btn btn-primary">📋 Copy link</button>
@@ -82,6 +96,6 @@
 
 <footer>Made with ♥ by <b>nuvish</b> · RecDrive uploads to the team Drive folder · viewable by everyone at aptreach.com</footer>
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

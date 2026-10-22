@@ -34,6 +34,11 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(
 .row { display: flex; gap: 22px; margin: 14px 0 4px; flex-wrap: wrap; }
 .switch-row { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 .switch-row input { width: 17px; height: 17px; accent-color: var(--red); }
+select {
+  background: #0e0e14; border: 1px solid var(--line); color: var(--text);
+  border-radius: 8px; padding: 7px 10px; font-size: 14px; outline: none; cursor: pointer;
+}
+select:focus { border-color: var(--red); }
 .controls { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .btn {
   border: 1px solid var(--line); background: #1b1b26; color: var(--text);
@@ -54,6 +59,7 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(
 .progress { height: 10px; background: #0e0e14; border-radius: 999px; overflow: hidden; margin: 12px 0 4px; }
 #up-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #0ea5e9, var(--ok)); transition: width .2s; }
 #link-box { display: flex; gap: 8px; margin-top: 12px; }
+#preview { width: 100%; border-radius: 10px; margin-top: 10px; background: #000; }
 #link-box input { flex: 1; }
 #up-actions { display: flex; gap: 8px; margin-top: 12px; }
 .sec-title { font-size: 15px; margin-bottom: 10px; }

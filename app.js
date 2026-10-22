@@ -58,32 +58,47 @@ function ensureToken() {
 
 /* ================= recording ================= */
 let displayStream = null, micStream = null, audioCtx = null, recorder = null;
-let chunks = [], startStamp = 0, elapsedBefore = 0, timerInt = null, lastBlob = null, lastName = '';
+let chunks = [], startStamp = 0, elapsedBefore = 0, timerInt = null, lastBlob = null, lastName = '', lastMime = 'video/webm';
 
 function pickMime() {
-  for (const m of ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', '']) {
-    if (!m || MediaRecorder.isTypeSupported(m)) return m;
-  }
+  // Compatibility first: MP4/H.264 and VP8 play everywhere (phones, Windows,
+  // VLC). VP9 from Chrome's MediaRecorder has produced garbled streams on
+  // some GPU/driver combos, so it is only a last resort.
+  const order = [
+    'video/mp4;codecs=avc1.640033,mp4a.40.2', 'video/mp4',
+    'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm', '',
+  ];
+  for (const m of order) { if (!m || MediaRecorder.isTypeSupported(m)) return m; }
   return '';
 }
 function fmtTime(ms) {
   const s = Math.floor(ms / 1000);
   return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 }
-function stampName() {
+function stampName(ext) {
   const d = new Date(), p = (n) => String(n).padStart(2, '0');
   const who = (userProfile && (userProfile.given_name || userProfile.name) || 'tester').replace(/\s+/g, '');
   let title = $('in-title').value.trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 50);
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}_${who}${title ? '_' + title : ''}.webm`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}_${who}${title ? '_' + title : ''}.${ext}`;
 }
 
+const QUALITY = {
+  high:     { bitrate: 12_000_000, width: 2560, height: 1440 },
+  balanced: { bitrate: 8_000_000,  width: 1920, height: 1080 },
+  light:    { bitrate: 5_000_000,  width: 1920, height: 1080 },
+};
+
 async function startRecording() {
+  const q = QUALITY[$('in-quality').value] || QUALITY.high;
   try {
     displayStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 }, audio: $('in-tab-audio').checked,
+      video: { width: { ideal: q.width, max: 3840 }, height: { ideal: q.height, max: 2160 }, frameRate: { ideal: 30, max: 30 } },
+      audio: $('in-tab-audio').checked,
     });
   } catch (e) { toast('Screen pick cancelled'); return; }
-  const tracks = [displayStream.getVideoTracks()[0]];
+  const videoTrack = displayStream.getVideoTracks()[0];
+  try { videoTrack.contentHint = 'detail'; } catch (e) {} // optimise encoding for crisp text over motion
+  const tracks = [videoTrack];
   // audio: mix tab/system audio + mic (either or both) into one track
   const sources = [];
   try {
@@ -103,11 +118,12 @@ async function startRecording() {
   } catch (e) { /* audio is optional — record video-only */ }
   const stream = new MediaStream(tracks);
   chunks = [];
-  recorder = new MediaRecorder(stream, { mimeType: pickMime() || undefined, videoBitsPerSecond: 5_000_000 });
+  recorder = new MediaRecorder(stream, { mimeType: pickMime() || undefined, videoBitsPerSecond: q.bitrate });
+  lastMime = (recorder.mimeType || 'video/webm').split(';')[0];
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
   recorder.onstop = onStopped;
   displayStream.getVideoTracks()[0].addEventListener('ended', () => { if (recorder && recorder.state !== 'inactive') stopRecording(); });
-  lastName = stampName();
+  lastName = stampName(lastMime.includes('mp4') ? 'mp4' : 'webm');
   recorder.start(1000);
   elapsedBefore = 0; startStamp = Date.now();
   $('timer').textContent = '00:00'; $('timer').classList.remove('hidden'); $('live-badge').classList.remove('hidden');
@@ -136,8 +152,13 @@ function cleanupStreams() {
   $('timer').classList.add('hidden'); $('live-badge').classList.add('hidden'); $('live-badge').textContent = '● REC';
 }
 function onStopped() {
-  lastBlob = new Blob(chunks, { type: 'video/webm' });
+  lastBlob = new Blob(chunks, { type: lastMime });
   cleanupStreams();
+  // in-app preview: the tester can eyeball the clip while it uploads —
+  // if it ever looks garbled, re-record instead of sharing a broken link.
+  const pv = $('preview');
+  pv.src = URL.createObjectURL(lastBlob);
+  $('preview-wrap').classList.remove('hidden');
   uploadVideo(lastBlob, lastName);
 }
 
@@ -152,8 +173,8 @@ async function uploadVideo(blob, name) {
     // 1) open a resumable session
     const init = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': 'video/webm', 'X-Upload-Content-Length': blob.size },
-      body: JSON.stringify({ name, mimeType: 'video/webm', parents: [CONFIG.FOLDER_ID] }),
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': lastMime, 'X-Upload-Content-Length': blob.size },
+      body: JSON.stringify({ name, mimeType: lastMime, parents: [CONFIG.FOLDER_ID] }),
     });
     if (!init.ok) throw new Error('upload init failed (' + init.status + ')');
     const sessionUri = init.headers.get('Location');
@@ -215,6 +236,9 @@ function renderHistory() {
 window.addEventListener('load', () => {
   if (!configured()) $('setup-banner').classList.remove('hidden');
   initAuth(); renderHistory();
+  const savedQ = localStorage.getItem('recdrive-quality');
+  if (savedQ) $('in-quality').value = savedQ;
+  $('in-quality').onchange = () => localStorage.setItem('recdrive-quality', $('in-quality').value);
   $('btn-auth').onclick = () => tokenClient && tokenClient.requestAccessToken({ prompt: 'consent' });
   $('btn-signout').onclick = () => { accessToken = null; userProfile = null; renderAuth(); };
   $('btn-start').onclick = startRecording;
