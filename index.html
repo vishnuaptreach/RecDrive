@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RecDrive — Record. Upload. Share the link.</title>
+<meta name="description" content="Screen recorder for QA teams: stop recording and the video is already in Google Drive with a shareable link.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='%23ef4444'/></svg>">
+<link rel="stylesheet" href="style.css?v=1">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="rec-dot"></div>
+    <div>
+      <h1>RecDrive</h1>
+      <p>Record. Upload. Share the link.</p>
+    </div>
+  </div>
+  <div id="user-box">
+    <span id="user-info" class="hidden"></span>
+    <button id="btn-auth" class="btn btn-primary">Sign in with Google</button>
+    <button id="btn-signout" class="btn btn-ghost hidden">Sign out</button>
+  </div>
+</header>
+
+<div id="setup-banner" class="banner hidden">
+  ⚠️ <b>Setup pending:</b> this copy has no Google Client ID / Drive folder configured yet.
+  See <b>SETUP.md</b> — once Vishnu adds them, this banner disappears.
+</div>
+
+<main>
+  <section class="card">
+    <label class="field-label" for="in-title">What are you testing? <span class="dim">(goes into the file name)</span></label>
+    <input id="in-title" type="text" placeholder="e.g. Login page — OTP not arriving" maxlength="80">
+
+    <div class="row">
+      <label class="switch-row">
+        <input type="checkbox" id="in-mic">
+        <span>🎙️ Microphone narration</span>
+      </label>
+      <label class="switch-row">
+        <input type="checkbox" id="in-tab-audio" checked>
+        <span>🔊 Tab / system audio</span>
+      </label>
+    </div>
+
+    <div class="controls">
+      <button id="btn-start" class="btn btn-record" disabled>● Start recording</button>
+      <button id="btn-pause" class="btn btn-ghost hidden">⏸ Pause</button>
+      <button id="btn-stop" class="btn btn-stop hidden">■ Stop &amp; upload</button>
+      <span id="timer" class="timer hidden">00:00</span>
+      <span id="live-badge" class="live hidden">● REC</span>
+    </div>
+    <p class="hint">Pick the <b>tab or window</b> you are testing when prompted. Stopping the recording uploads it to the shared Drive folder automatically — no manual upload, ever.</p>
+  </section>
+
+  <section id="upload-card" class="card hidden">
+    <div class="up-head">
+      <span id="up-name"></span>
+      <span id="up-pct">0%</span>
+    </div>
+    <div class="progress"><div id="up-bar"></div></div>
+    <p id="up-status" class="hint">Uploading…</p>
+    <div id="link-box" class="hidden">
+      <input id="link-out" type="text" readonly>
+      <button id="btn-copy" class="btn btn-primary">📋 Copy link</button>
+    </div>
+    <div id="up-actions" class="hidden">
+      <button id="btn-retry" class="btn btn-ghost">↻ Retry upload</button>
+      <button id="btn-download" class="btn btn-ghost">⬇ Download instead</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="sec-title">🗂️ My uploads this session</h2>
+    <ul id="history" class="history"></ul>
+    <p id="history-empty" class="hint">Nothing yet — your recording links will stay here even after a refresh, ready to paste into the sheet.</p>
+  </section>
+</main>
+
+<footer>Made with ♥ by <b>nuvish</b> · RecDrive uploads to the team Drive folder · viewable by everyone at aptreach.com</footer>
+<div id="toast" class="toast hidden"></div>
+<script src="app.js?v=1"></script>
+</body>
+</html>
