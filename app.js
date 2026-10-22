@@ -266,15 +266,22 @@ function setProgress(pct, status) {
 /* ================= delete ================= */
 async function deleteDriveFile(id) {
   const token = await ensureToken();
-  // trash first — folder owners/editors can trash; permanent delete is owner-only
-  const tr = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '/trash', {
-    method: 'POST', headers: { Authorization: 'Bearer ' + token },
-  });
-  if (tr.ok) return;
-  const r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id), {
-    method: 'DELETE', headers: { Authorization: 'Bearer ' + token },
-  });
-  if (!r.ok && r.status !== 204) throw new Error('delete failed (' + r.status + ')');
+  const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id);
+  const headers = { Authorization: 'Bearer ' + token };
+  const errs = [];
+  // permanent delete first (files you own), then trash (folder owners/editors);
+  // a network-level failure of one must not block trying the other.
+  try {
+    const r = await fetch(base, { method: 'DELETE', headers });
+    if (r.ok || r.status === 204) return;
+    errs.push('delete ' + r.status);
+  } catch (e) { errs.push('delete: ' + e.message); }
+  try {
+    const r = await fetch(base + '/trash', { method: 'POST', headers });
+    if (r.ok) return;
+    errs.push('trash ' + r.status);
+  } catch (e) { errs.push('trash: ' + e.message); }
+  throw new Error(errs.join(' · '));
 }
 async function deleteRecording(id) {
   if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
