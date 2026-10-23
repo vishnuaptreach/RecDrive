@@ -6,7 +6,7 @@
 <title>RecDrive — Record. Upload. Share the link.</title>
 <meta name="description" content="Screen recorder for QA teams: stop recording and the video is already in Google Drive with a shareable link.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='%23ef4444'/></svg>">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -104,6 +104,16 @@
 
 <footer>Made with ♥ by <b>nuvish</b> · RecDrive uploads to the team Drive folder · viewable by everyone at aptreach.com</footer>
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=6"></script>
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="modal-title"></h3>
+    <p id="modal-msg"></p>
+    <div class="modal-actions">
+      <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="modal-ok" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+<script src="app.js?v=8"></script>
 </body>
 </html>

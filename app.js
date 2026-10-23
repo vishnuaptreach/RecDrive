@@ -16,6 +16,24 @@ const toast = (msg, ms = 2600) => {
 };
 const configured = () => CONFIG.CLIENT_ID && CONFIG.FOLDER_ID;
 
+/* ================= confirm dialog (custom, themed) ================= */
+function confirmDialog(title, msg, okLabel = 'OK') {
+  return new Promise((resolve) => {
+    $('modal-title').textContent = title;
+    $('modal-msg').textContent = msg;
+    $('modal-ok').textContent = okLabel;
+    $('modal').classList.remove('hidden');
+    const done = (v) => {
+      $('modal').classList.add('hidden');
+      $('modal-ok').onclick = $('modal-cancel').onclick = $('modal').onclick = null;
+      resolve(v);
+    };
+    $('modal-ok').onclick = () => done(true);
+    $('modal-cancel').onclick = () => done(false);
+    $('modal').onclick = (e) => { if (e.target === $('modal')) done(false); };
+  });
+}
+
 /* ================= auth (Google Identity Services) ================= */
 let tokenClient = null, accessToken = null, tokenExpiry = 0, userProfile = null;
 
@@ -284,7 +302,8 @@ async function deleteDriveFile(id) {
   throw new Error(errs.join(' · '));
 }
 async function deleteRecording(id) {
-  if (!confirm('Ee file Drive-il ninnu delete cheyyano? Link pinne work cheyyilla.')) return;
+  const ok = await confirmDialog('🗑️ Delete this file?', 'Ee file Drive-il ninnu delete cheyyum. Link pinne work cheyyilla.', 'Delete');
+  if (!ok) return;
   try {
     await deleteDriveFile(id);
     if (id === lastFileId) {
@@ -329,9 +348,10 @@ function renderRecs() {
     const mb = f.size ? ' · ' + (f.size / 1048576).toFixed(1) + ' MB' : '';
     const icon = (f.mimeType || '').startsWith('image/') ? '🖼️' : '🎬';
     const canDel = f.capabilities && (f.capabilities.canTrash || f.capabilities.canDelete);
-    return `<li><span class="h-name" title="${f.name}">${icon} ${f.name}</span><span class="h-meta">${t}${mb}</span><a href="${f.webViewLink}" target="_blank" rel="noopener">Open ↗</a>${canDel ? `<button class="h-del" data-id="${f.id}" title="Delete from Drive">🗑️</button>` : ''}</li>`;
+    return `<li><span class="h-name" title="${f.name}">${icon} ${f.name}</span><span class="h-meta">${t}${mb}</span><a href="${f.webViewLink}" target="_blank" rel="noopener">Open ↗</a><button class="h-copy" data-link="${f.webViewLink}" title="Copy link">📋</button>${canDel ? `<button class="h-del" data-id="${f.id}" title="Delete from Drive">🗑️</button>` : ''}</li>`;
   }).join('');
   document.querySelectorAll('#rec-list .h-del').forEach((b) => { b.onclick = () => deleteRecording(b.dataset.id); });
+  document.querySelectorAll('#rec-list .h-copy').forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.link); toast('Link copied 📋'); } catch (e) { toast('Copy failed'); } } });
 }
 
 /* ================= wire up ================= */
